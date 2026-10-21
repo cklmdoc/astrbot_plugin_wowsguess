@@ -1,4 +1,4 @@
-"""HTML card rendering for WowsGuess feedback images."""
+"""HTML card rendering for WowsGuess feedback and help images."""
 
 from __future__ import annotations
 
@@ -116,6 +116,52 @@ h1 {{ margin:0; font-size:35px; line-height:1.18; letter-spacing:.01em; }}
   </header>
   <main class="grid">{grid}</main>
   <footer class="footer"><span>🟩 完全相同　🟨 接近　⬜ 不匹配　⬆⬇ 答案数值方向</span><strong>{_text(view.get("status_text", ""))}</strong></footer>
+</section>
+</body>
+</html>'''
+
+
+def build_help_card_html(commands: list[dict[str, Any]]) -> str:
+    """Build an injection-safe command reference card for the help action."""
+    cards = []
+    for item in commands:
+        admin_badge = "<span class=\"badge admin\">管理员</span>" if item.get("admin_only") else ""
+        cards.append(
+            f'''<article class="command-card">
+  <div class="command-meta"><span class="category">{_text(item.get("category", "命令"))}</span>{admin_badge}</div>
+  <code>{_text(item.get("command", ""))}</code>
+  <p>{_text(item.get("description", ""))}</p>
+</article>'''
+        )
+    grid = "\n".join(cards) or '<div class="empty">暂无可用命令</div>'
+    return f'''<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+* {{ box-sizing:border-box; }}
+body {{ margin:0; padding:28px; background:#0e1726; color:#edf4ff; font-family:"Noto Sans CJK SC","Noto Sans SC","Microsoft YaHei",Arial,sans-serif; }}
+.board {{ width:1060px; margin:0 auto; border:1px solid #30415c; border-radius:22px; overflow:hidden; background:linear-gradient(145deg,#142238,#0e1726 62%); box-shadow:0 16px 48px rgba(0,0,0,.35); }}
+.header {{ padding:26px 30px 22px; border-bottom:1px solid #30415c; }}
+.eyebrow {{ margin:0 0 8px; color:#7f9abb; font-size:17px; letter-spacing:.1em; }}
+h1 {{ margin:0; font-size:36px; line-height:1.2; }}
+.subtitle {{ margin:10px 0 0; color:#afc0d7; font-size:18px; }}
+.grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:15px; padding:24px 30px 28px; }}
+.command-card {{ min-height:142px; padding:18px 19px; border:1px solid #3a506f; border-radius:16px; background:linear-gradient(145deg,#243851,#1a2a40); }}
+.command-meta {{ display:flex; align-items:center; justify-content:space-between; min-height:24px; color:#8fa7c4; font-size:15px; }}
+.badge {{ padding:4px 9px; border-radius:999px; font-size:13px; }}
+.badge.admin {{ color:#f8d98a; background:#594617; border:1px solid #8c7026; }}
+code {{ display:block; margin-top:13px; color:#fff; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:22px; font-weight:700; word-break:break-word; }}
+p {{ margin:12px 0 0; color:#b8c8da; font-size:17px; line-height:1.45; }}
+.footer {{ padding:15px 30px; border-top:1px solid #30415c; color:#aebfd5; font-size:16px; line-height:1.5; }}
+.empty {{ grid-column:1/-1; padding:25px; color:#aebfd5; text-align:center; }}
+</style>
+</head>
+<body>
+<section class="board">
+  <header class="header"><p class="eyebrow">WOWSGUESS · COMMAND GUIDE</p><h1>《窝一把·猜战舰》</h1><p class="subtitle">聊天中玩战舰猜谜，按属性反馈逐步锁定答案</p></header>
+  <main class="grid">{grid}</main>
+  <footer class="footer">等级支持阿拉伯数字与罗马数字（V-XI），可使用范围如 <b>8-10</b>；每局最多 8 次。🟩 精确　🟨 接近　⬜ 不匹配　⬆⬇ 答案数值方向</footer>
 </section>
 </body>
 </html>'''

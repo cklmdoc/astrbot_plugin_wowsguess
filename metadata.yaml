@@ -2,8 +2,8 @@ name: astrbot_plugin_wowsguess
 display_name: 窝一把·猜战舰
 desc: 在聊天中玩《战舰世界》猜船游戏，按舰船属性反馈猜测结果。
 short_desc: 战舰猜谜小游戏：猜船名、看属性反馈，支持普通/困难和等级筛选。
-author: Hermes Agent
-version: 1.1.0
+author: cklmdoc & Hermes Agent
+version: 1.2.0
 astrbot_version: ">=4.16,<5"
 support_platforms:
   - aiocqhttp

@@ -10,7 +10,7 @@ from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star, StarTools
 
 from .catalog import Catalogue
-from .card_renderer import build_guess_card_html, make_guess_card_view
+from .card_renderer import build_guess_card_html, build_help_card_html, make_guess_card_view
 from .data_store import DataUnavailableError, WowsGuessDataStore
 from .game_service import GameService
 from .tier import format_tier_range, parse_start_options
@@ -115,6 +115,50 @@ class WowsGuessPlugin(Star):
             options={"type": "png", "full_page": True, "animations": "disabled"},
         )
 
+    async def _render_help_card(self) -> str:
+        """Render the command reference with one visual card per command."""
+        return await self.html_render(
+            build_help_card_html(self._help_commands()),
+            {},
+            options={"type": "png", "full_page": True, "animations": "disabled"},
+        )
+
+    @staticmethod
+    def _help_commands() -> list[dict[str, Any]]:
+        return [
+            {
+                "category": "开始游戏",
+                "command": "/猜船 开始 [普通|困难] [等级/范围]",
+                "description": "新开一局。例：`开始 普通 V`、`开始 困难 8-10`；等级支持阿拉伯数字与罗马数字。",
+            },
+            {
+                "category": "提交猜测",
+                "command": "/猜船 猜 <舰名>",
+                "description": "猜一艘船；支持中文名、英文名、舰船代码和别名。每局最多猜 8 次。",
+            },
+            {
+                "category": "查看进度",
+                "command": "/猜船 状态",
+                "description": "查看当前难度、等级范围、已猜舰船和剩余次数。",
+            },
+            {
+                "category": "结束本局",
+                "command": "/猜船 放弃",
+                "description": "结束当前游戏并公布答案；结束后即可开始下一局。",
+            },
+            {
+                "category": "帮助",
+                "command": "/猜船 帮助",
+                "description": "显示这张指令卡片；也可发送 `/猜船` 查看。",
+            },
+            {
+                "category": "题库管理",
+                "command": "/猜船 刷新数据",
+                "description": "从窝一把刷新公开舰船与题库数据。",
+                "admin_only": True,
+            },
+        ]
+
     def _format_state(self, catalogue: Catalogue, state: dict[str, Any]) -> str:
         guesses = list(state.get("guesses") or [])
         labels = [self._name(catalogue.ship(index) or {"index": index}) for index in guesses]
@@ -141,6 +185,14 @@ class WowsGuessPlugin(Star):
         action = action.strip()
         argument = argument.strip()
         if not action or action in {"帮助", "help"}:
+            if self.config.get("render_cards", True):
+                try:
+                    help_url = await self._render_help_card()
+                except Exception as exc:
+                    logger.warning("Failed to render WowsGuess help card: %s", exc)
+                else:
+                    yield event.image_result(help_url)
+                    return
             yield event.plain_result(self._help_text())
             return
         if action == "开始":
@@ -253,12 +305,13 @@ class WowsGuessPlugin(Star):
     @staticmethod
     def _help_text() -> str:
         return (
-            "《窝一把·猜战舰》\n"
-            "`/猜船 开始 [普通|困难] [等级/范围]` — 新开一局，如 `开始 普通 V`、`开始 困难 8-10`\n"
-            "等级可用阿拉伯数字或罗马数字（V-XI）；省略等级时从全部等级选题。\n"
-            "`/猜船 猜 <舰名>` — 提交猜测\n"
-            "`/猜船 状态` — 查看进度\n"
-            "`/猜船 放弃` — 公布答案\n"
-            "🟩 精确；🟨 接近；⬆/⬇ 表示答案数值更高/更低；⬜ 不匹配。\n"
-            "每局最多 8 次；每个群聊/私聊独立保存进度。"
+            "《窝一把·猜战舰》指令帮助（图片不可用时的文本版）\n"
+            "`/猜船 开始 [普通|困难] [等级/范围]` — 新开一局；例：`/猜船 开始 普通 V`、`/猜船 开始 困难 8-10`\n"
+            "`/猜船 猜 <舰名>` — 提交中文名、英文名、代码或别名\n"
+            "`/猜船 状态` — 查看难度、等级限制、已猜列表与剩余次数\n"
+            "`/猜船 放弃` — 结束本局并公布答案\n"
+            "`/猜船 帮助` — 显示指令卡片\n"
+            "`/猜船 刷新数据` — 刷新公开题库（仅管理员）\n"
+            "等级支持阿拉伯数字和罗马数字（V-XI），范围如 8-10；每局最多 8 次。\n"
+            "🟩 精确；🟨 接近；⬆/⬇ 表示答案数值更高/更低；⬜ 不匹配。"
         )
