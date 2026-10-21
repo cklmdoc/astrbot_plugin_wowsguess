@@ -1,0 +1,1 @@
+"""AstrBot WowsGuess plugin package."""

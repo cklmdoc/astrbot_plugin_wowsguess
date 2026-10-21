@@ -1,0 +1,12 @@
+{
+  "refresh_on_start": {
+    "description": "插件启动时刷新窝一把公开题库；失败时仍会使用本地缓存。",
+    "type": "bool",
+    "default": true
+  },
+  "render_cards": {
+    "description": "猜测后使用多宫格图片卡片展示属性反馈；关闭后改用纯文本。",
+    "type": "bool",
+    "default": true
+  }
+}
