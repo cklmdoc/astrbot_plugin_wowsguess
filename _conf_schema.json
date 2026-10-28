@@ -1,12 +1,95 @@
 {
   "refresh_on_start": {
-    "description": "插件启动时刷新窝一把公开题库；失败时仍会使用本地缓存。",
     "type": "bool",
-    "default": true
+    "default": true,
+    "description": "启动刷新题库",
+    "hint": "插件启动时从 woyiba.com 下载最新公开题库；下载失败时继续使用本地缓存，不影响对局。默认开启。"
+  },
+  "free_text_guess": {
+    "type": "bool",
+    "default": true,
+    "description": "免命令直猜",
+    "hint": "对局中直接发送舰名（或“猜XX”）即算一次猜测，无需输入 /猜船 猜；私聊和 @机器人 时生效，群聊免 @ 见下一项。"
+  },
+  "group_guess_without_at": {
+    "type": "bool",
+    "default": true,
+    "description": "群聊免 @",
+    "hint": "群聊未 @ 时也允许猜船：整句话正好是舰名（或“我猜X”）才计数；状态/放弃/开始等指令仍需 @；重复舰名静默忽略。关闭后群里必须 @ 才能猜。"
   },
   "render_cards": {
-    "description": "猜测后使用多宫格图片卡片展示属性反馈；关闭后改用纯文本。",
     "type": "bool",
-    "default": true
+    "default": true,
+    "description": "图片卡片",
+    "hint": "用图片卡片展示属性反馈、历史与帮助；关闭后改为纯文本。渲染失败时会自动回退，不影响对局。"
+  },
+  "render_backend": {
+    "type": "string",
+    "default": "auto",
+    "options": [
+      "auto",
+      "local",
+      "remote"
+    ],
+    "description": "渲染后端",
+    "hint": "auto=优先本地 Playwright、失败后回退远端 html_render；local=只用本地；remote=只用远端。默认 auto。"
+  },
+  "card_image_format": {
+    "type": "string",
+    "default": "png",
+    "options": [
+      "png",
+      "jpeg"
+    ],
+    "description": "图片格式",
+    "hint": "png 文字最锐利（默认）；jpeg 体积更小、发送更快。"
+  },
+  "card_image_quality": {
+    "type": "int",
+    "default": 80,
+    "description": "JPEG 质量",
+    "hint": "范围 30-95，仅图片格式为 jpeg 时生效；越高越清晰、体积越大。默认 80。"
+  },
+  "render_scale": {
+    "type": "float",
+    "default": 1.5,
+    "description": "渲染倍率",
+    "hint": "范围 0.5-2.0。卡片宽 1060 px，默认 1.5 倍输出约 1590 px，手机上更清晰；调小可减小图片体积。"
+  },
+  "browser_path": {
+    "type": "string",
+    "default": "",
+    "description": "Chromium 路径",
+    "hint": "留空自动探测 Playwright 默认或缓存浏览器；本地渲染异常时可手动指定 Chromium 可执行文件。"
+  },
+  "local_render_timeout_seconds": {
+    "type": "float",
+    "default": 20.0,
+    "description": "本地渲染超时",
+    "hint": "单位为秒，包含首次启动 Chromium 的冷启动时间；超时后按配置回退远端或纯文本。默认 20。"
+  },
+  "remote_render_fallback": {
+    "type": "bool",
+    "default": true,
+    "description": "远端渲染回退",
+    "hint": "本地渲染失败或超时时，是否回退到 AstrBot 的远端 html_render；仅渲染后端为 auto 时生效。"
+  },
+  "render_timeout_seconds": {
+    "type": "float",
+    "default": 15.0,
+    "description": "远端渲染超时",
+    "hint": "远端 html_render 兜底超时（秒）；超时后放弃渲染、改发纯文本，避免长时间等待。默认 15。"
+  },
+  "llm_tool_enabled": {
+    "type": "bool",
+    "default": true,
+    "description": "启用 LLM 工具",
+    "hint": "注册 wows_guess 工具，支持“帮我猜胡德”“还剩几次”“开始困难 8-10 级”等自然语言；需要模型支持 function calling。"
+  },
+  "llm_tool_cards_only": {
+    "type": "bool",
+    "default": true,
+    "description": "LLM 仅返回卡片",
+    "hint": "LLM 调用时只发送卡片，不让模型再补充文字（少一次模型请求，回复更快）。默认开启。"
   }
 }

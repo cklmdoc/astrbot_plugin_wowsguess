@@ -15,14 +15,27 @@ class Catalogue:
         attributes: dict[str, Any],
         pools: dict[str, dict[str, Any]],
     ) -> None:
-        self.ships = list(ships)
-        self.attributes = attributes
-        self.pools = pools
-        self.by_index = {str(ship["index"]): ship for ship in self.ships}
-        self.definitions = {
-            str(definition["key"]): definition
-            for definition in attributes.get("attributes", [])
-        }
+        self.ships = [ship for ship in ships if isinstance(ship, dict)]
+        self.attributes = attributes if isinstance(attributes, dict) else {}
+        self.pools = pools if isinstance(pools, dict) else {}
+        self.by_index: dict[str, dict[str, Any]] = {}
+        for ship in self.ships:
+            index = ship.get("index")
+            if isinstance(index, str) and index.strip():
+                self.by_index.setdefault(index, ship)
+        raw_definitions = self.attributes.get("attributes")
+        self.definitions: dict[str, dict[str, Any]] = {}
+        if isinstance(raw_definitions, list):
+            for definition in raw_definitions:
+                if not isinstance(definition, dict):
+                    continue
+                key = definition.get("key")
+                if isinstance(key, str) and key.strip():
+                    self.definitions.setdefault(key, definition)
+        self._exact_names: dict[str, list[dict[str, Any]]] = {}
+        for ship in self.ships:
+            for name in self._ship_names(ship):
+                self._exact_names.setdefault(name, []).append(ship)
 
     @staticmethod
     def _normalise(value: str) -> str:
@@ -47,7 +60,7 @@ class Catalogue:
         if not needle:
             return None, []
 
-        exact = [ship for ship in self.ships if needle in self._ship_names(ship)]
+        exact = list(self._exact_names.get(needle, ()))
         if len(exact) == 1:
             return exact[0], []
         if exact:
@@ -59,6 +72,16 @@ class Catalogue:
             if any(needle in name for name in self._ship_names(ship))
         ]
         return (partial[0], []) if len(partial) == 1 else (None, partial[:limit])
+
+    def match_exact(self, query: str) -> dict[str, Any] | None:
+        """Return the only ship whose index/name/nameZh/aliasZh exactly equals query.
+
+        Unlike :meth:`resolve`, this never falls back to partial matching, so it is
+        safe for free-text chat input: a sentence that merely contains a ship name
+        does not turn into a guess.
+        """
+        ships = self._exact_names.get(self._normalise(query))
+        return ships[0] if ships and len(ships) == 1 else None
 
     def ship(self, index: str) -> dict[str, Any] | None:
         return self.by_index.get(index)
