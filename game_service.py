@@ -16,7 +16,7 @@ from .tier import format_tier_range
 class GameService:
     """Keep one independent saved round per AstrBot session id."""
 
-    def __init__(self, data_dir: Path, max_attempts: int = 8) -> None:
+    def __init__(self, data_dir: Path, max_attempts: int = 15) -> None:
         self.games_dir = data_dir / "games"
         self.games_dir.mkdir(parents=True, exist_ok=True)
         self.max_attempts = max_attempts
@@ -84,6 +84,7 @@ class GameService:
                 "tierRange": list(tier_range) if tier_range is not None else None,
                 "answerIndex": answer_index,
                 "guesses": [],
+                "players": [],
                 "status": "playing",
             }
             self._write(session_id, state)
@@ -94,7 +95,12 @@ class GameService:
             return self._read(session_id)
 
     async def guess(
-        self, session_id: str, guess_ship: dict[str, Any], catalogue: Catalogue
+        self,
+        session_id: str,
+        guess_ship: dict[str, Any],
+        catalogue: Catalogue,
+        *,
+        player: str = "",
     ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         async with self._lock:
             state = self._read(session_id)
@@ -112,6 +118,8 @@ class GameService:
                 catalogue.definitions,
                 max_attempts=self.max_attempts,
             )
+            previous = list(state.get("players") or [""] * len(state.get("guesses") or []))
+            updated = {**updated, "players": previous + [str(player or "")]}
             self._write(session_id, updated)
             return updated, row, answer
 

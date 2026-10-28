@@ -3,7 +3,21 @@ display_name: 窝一把·猜战舰
 desc: 在聊天中玩《战舰世界》猜船游戏，按舰船属性反馈猜测结果。
 short_desc: 战舰猜谜小游戏：猜船名、看属性反馈，支持普通/困难和等级筛选。
 author: cklmdoc & Hermes Agent
-version: 1.2.0
+version: 1.7.1
+repo: https://github.com/cklmdoc/astrbot_plugin_wowsguess
+category: 娱乐
+tags:
+  - 娱乐
+  - 游戏
+  - 战舰世界
+  - 窝一把
+  - 猜船
+  - 猜谜
+  - WOWS
+  - World of Warships
+  - 群聊
+  - 多人
+  - 休闲
 astrbot_version: ">=4.16,<5"
 support_platforms:
   - aiocqhttp

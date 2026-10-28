@@ -82,7 +82,7 @@ def evaluate_guess(
     for key in pool["attributeKeys"]:
         definition = definitions.get(key)
         if definition is None:
-            raise ValueError(f"Unknown attribute {key!r}; refresh site data")
+            raise ValueError(f"未知属性 {key!r}，请发送 `/猜船 刷新数据` 更新题库。")
         feedback.append(
             compare_attribute(
                 guess.get("attrs", {}).get(key),
@@ -102,16 +102,16 @@ def submit_guess(
     answer: dict[str, Any],
     pool: dict[str, Any],
     definitions: dict[str, dict[str, Any]],
-    max_attempts: int = 8,
+    max_attempts: int = 15,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Apply one unique guess and return the persisted state plus result row."""
     if state.get("status") != "playing":
-        raise ValueError("This game has already ended")
+        raise ValueError("本局已经结束，请发送 `/猜船 开始` 新开一局。")
     guessed_indices = list(state.get("guesses") or [])
     if guess["index"] in guessed_indices:
-        raise ValueError("That ship was already guessed")
+        raise ValueError("这艘船已经猜过了，换一艘试试。")
     if len(guessed_indices) >= max_attempts:
-        raise ValueError("No attempts remain")
+        raise ValueError("本局次数已经用完，请发送 `/猜船 开始` 新开一局。")
 
     row = evaluate_guess(guess, answer, pool, definitions)
     row["attempt"] = len(guessed_indices) + 1

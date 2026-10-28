@@ -23,6 +23,10 @@ class Catalogue:
             str(definition["key"]): definition
             for definition in attributes.get("attributes", [])
         }
+        self._exact_names: dict[str, list[dict[str, Any]]] = {}
+        for ship in self.ships:
+            for name in self._ship_names(ship):
+                self._exact_names.setdefault(name, []).append(ship)
 
     @staticmethod
     def _normalise(value: str) -> str:
@@ -47,7 +51,7 @@ class Catalogue:
         if not needle:
             return None, []
 
-        exact = [ship for ship in self.ships if needle in self._ship_names(ship)]
+        exact = list(self._exact_names.get(needle, ()))
         if len(exact) == 1:
             return exact[0], []
         if exact:
@@ -59,6 +63,16 @@ class Catalogue:
             if any(needle in name for name in self._ship_names(ship))
         ]
         return (partial[0], []) if len(partial) == 1 else (None, partial[:limit])
+
+    def match_exact(self, query: str) -> dict[str, Any] | None:
+        """Return the only ship whose index/name/nameZh/aliasZh exactly equals query.
+
+        Unlike :meth:`resolve`, this never falls back to partial matching, so it is
+        safe for free-text chat input: a sentence that merely contains a ship name
+        does not turn into a guess.
+        """
+        ships = self._exact_names.get(self._normalise(query))
+        return ships[0] if ships and len(ships) == 1 else None
 
     def ship(self, index: str) -> dict[str, Any] | None:
         return self.by_index.get(index)
