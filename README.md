@@ -1,91 +1,88 @@
 # WowsGuess AstrBot 插件
 
-将 [woyiba.com](https://www.woyiba.com/) 的《战舰世界》猜船玩法移植到 AstrBot 聊天会话中。
+将 [woyiba.com](https://www.woyiba.com/) 的《战舰世界》猜船玩法搬进 AstrBot 聊天：发送舰名猜答案，插件按舰种、等级、血量、火力等 12 项属性给出 🟩 精确 / 🟨 接近 / ⬆⬇ 方向 / ⬜ 不匹配的反馈，直到猜中或 15 次用尽。
 
 ## 指令
 
 | 指令 | 说明 |
 | --- | --- |
-| `/猜船 开始 [普通\|困难] [等级/范围]` | 在当前私聊或群聊会话新开一局（默认普通）；可限制答案等级，例如 `V`、`Ⅷ`、`8-10` 或 `VIII-X`；群聊存在进行中游戏时必须先结束该局。 |
-| `/猜船 猜 <舰名/英文名/代码/别名>` | 提交一次猜测；可用中文、英文、代码或中文别名。 |
-| 直接发舰名 / 自然语言 | 对局中无需输入 `/猜船 猜`：直接发送 `胡德`，或说“帮我猜胡德”“还剩几次”“放弃”。群里不 @ 也生效：未 @ 时只认整句舰名（或“我猜X”），闲聊不接管；也可用配置关闭。 |
-| `/猜船 状态` | 查看本局已猜记录与剩余次数（渲染为状态卡片）。 |
-| `/猜船 放弃` | 结束本局并公布答案。 |
-| `/猜船 帮助` | 显示使用方法和判定规则。 |
-| `/猜船 刷新数据` | 从 woyiba.com 下载最新公开题库数据；仅 AstrBot 管理员可用。 |
+| `/猜船 开始 [普通\|困难] [等级/范围]` | 新开一局（默认普通）；可限制答案等级，如 `V`、`8-10`、`VIII-X`。 |
+| `/猜船 猜 <舰名>` | 提交猜测，支持中文名、英文名、代码或别名。 |
+| `/猜船 状态` | 查看进度与已猜记录（卡片）。 |
+| `/猜船 放弃` | 结束本局并公布答案（卡片）。 |
+| `/猜船 帮助` | 查看玩法与判定规则（卡片）。 |
+| `/猜船 刷新数据` | 下载最新公开题库，仅管理员可用。 |
 
-每局最多 15 次。开始游戏时可指定答案船等级，例如 `/猜船 开始 普通 V` 或 `/猜船 开始 普通 8-10`；每次 `/猜船 猜` 默认会生成一张 4×3 的属性多宫格卡片：🟩 是精确命中、🟨 是接近、⬆/⬇ 表示答案数值更高/更低、⬜ 是不匹配。群聊内有进行中游戏时，必须先猜中、耗尽次数或执行 `/猜船 放弃`，才能开始下一局。
+- 对局中不必输入 `/猜船 猜`：直接发舰名即算一次猜测（见“自然语言与免命令”）。
+- 每局最多 15 次；群聊内的命令与自然语言需要 @机器人（免 @ 直猜除外）。
 
-## 卡片展示
+## 卡片与渲染
 
-- 默认 `render_cards=true`：`/猜船 帮助`、每次猜测、`/猜船 状态` 与 `/猜船 放弃` 都会渲染成深色图片卡片；板式在 1.6.0 起参考姊妹插件 mcguess 的结构：牌头（难度与局状态、剩余机会大数字 + 分段机会条）、本次猜测横幅（第几次、谁猜的、舰名与属性命中数）、4 列属性格（右上角状态图标、大号数值、方向徽章）、最近猜测记录表（序号/名称/玩家/逐属性状态/命中数）、底部图例与本局提示。状态卡片展示完整进度与记录，结束或放弃后直接展示答案；帮助卡片是三块规则说明 + 双列指令卡，管理员指令带“管理员”标记。
-- 单张卡片固定 1060px 宽，属性格为 4 列，最多 12 项属性正好三行；猜测记录默认展示最近 5 次（状态卡片 10 次），超出时标注“共 N 次”。
-- **本地渲染优先**：默认 `render_backend=auto`，插件用本地 Playwright + Chromium 截图（单张热态约 0.3s，冷启动约 1–2s），避开公共 t2i 服务抖动；本地失败时自动回退 AstrBot 的远端 `html_render()`，再失败则熔断并回退纯文本。每个后端都有超时，最长等待时间可控（默认本地 20s / 远端 15s）。卡片本地渲染失败时，文本回复仍包含完整的属性反馈。
-- 图片格式、清晰度倍率、浏览器路径、超时与兜底策略都可以在配置里调整；没装 Playwright/Chromium 的机器会自动保持远端渲染，不影响插件加载。
-- 可在插件配置中关闭 `render_cards`，强制使用纯文本。
+猜测、状态、放弃、帮助都会渲染为 1060px 深色卡片：12 格属性反馈 + 最近 5 次记录（状态卡 10 次），属性格 4 列三行；猜中、放弃或次数用尽后直接展示答案。
+
+- 默认 `render_backend=auto`：本地 Playwright + Chromium 截图优先（热态约 0.3s），失败自动回退 AstrBot 远端 `html_render()`，仍失败则熔断并回退纯文本。
+- 本地/远端分别有超时（默认 20s / 15s）；未安装 Playwright 的机器自动保持远端渲染；`render_cards=false` 强制纯文本。
+- 图片格式、清晰度倍率、浏览器路径、超时与回退策略均可配置。
+
+### 卡片预览
+
+| 猜测卡 | 猜中卡 | 次数用尽结算卡 |
+| --- | --- | --- |
+| ![猜测卡](docs/images/card-guess.png) | ![猜中卡](docs/images/card-win.png) | ![次数用尽结算卡](docs/images/card-lost.png) |
+
+| 状态卡 | 帮助卡 |
+| --- | --- |
+| ![状态卡](docs/images/card-status.png) | ![帮助卡](docs/images/card-help.png) | 
+
+预览图中的对局与玩家名为演示数据；词库、答案与属性比较逻辑均为真实实现。
 
 ## 自然语言与免命令
 
-- **免命令直猜**（`free_text_guess`，默认开启）：对局中直接发舰名即视为一次猜测，例如群里 `胡德`、`@机器人 胡德`、私聊直接发 `胡德`。@ 时接受“整句舰名”或“猜/我猜/帮我猜”前缀、“号/舰”后缀和标点；不会把“胡德好强啊”这类长句误当成猜测；匹配不上时消息照常交给 LLM 聊天。
-- **群聊免 @ 猜测**（`group_guess_without_at`，默认开启）：AstrBot 的唤醒检查会对“被插件 handler filter 命中”的消息放行（`free_text_guess` 监听所有消息），所以群聊未 @ 的消息也能到达插件。开启时，对局中整句话正好是舰名或“我猜X”才算一次猜测；状态/放弃等指令仍需 @；重复舰名静默忽略；命中后 `stop_event`，避免其它插件（Heartflow 等）再回复一次。关闭后群聊必须 @机器人 才能猜。
-- **LLM 工具**（`llm_tool_enabled`，默认开启）：注册函数工具 `wows_guess`，支持“帮我猜胡德”“还剩几次”“放弃”“开始困难 8-10 级”等自然语言。需要模型支持 function calling；插件只在消息看起来与猜船相关、或刚用过工具时把工具交给模型（`on_llm_request` 钩子），避免每个请求都白付工具定义的 token。对局中会通过临时内容片段（`extra_user_content_parts`，不写入历史）给模型追加一句提示，避免破坏系统提示词缓存。
-- **只发卡片**（`llm_tool_cards_only`，默认开启）：工具发送图片卡片后直接结束本轮，不再额外请求一次模型补充文字，回复更快。
-- 默认唤醒前缀为空时，群聊里的 `/猜船` 命令和 LLM 自然语言仍需要 @机器人；免 @ 只对“对局中整句舰名”这类的免命令直猜生效。
+- **免命令直猜**（`free_text_guess`，默认开启）：对局中直接发“整句舰名”即算一次；@机器人时还接受“猜/我猜/帮我猜”前缀与“号/舰”后缀及标点；长句不误判，匹配不上则照常交给 LLM 聊天。
+- **群聊免 @**（`group_guess_without_at`，默认开启）：对局中整句是舰名或“我猜X”才计为猜测，闲聊不接管；`状态/放弃`等指令仍需 @；重复舰名静默忽略；命中后 `stop_event`，避免其他插件重复回复。
+- **LLM 工具**（`llm_tool_enabled`，默认开启）：注册 `wows_guess` 工具，支持“帮我猜胡德”“还剩几次”“放弃”“开始困难 8-10 级”等自然语言（需模型支持 function calling）。仅在消息与猜船相关或刚用过工具时暴露工具；对局提示以临时内容片段注入，不破坏系统提示词缓存。
+- **只发卡片**（`llm_tool_cards_only`，默认开启）：工具发送卡片后直接结束本轮，不再让模型补充文字。
 
-## 配置项
+## 配置
 
-| 配置 | 短标题 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `refresh_on_start` | 启动刷新题库 | `true` | 启动时刷新题库；已有缓存时在后台刷新、不阻塞插件加载，失败继续使用旧缓存。 |
-| `free_text_guess` | 免命令直猜 | `true` | 对局中直接发舰名（或“猜XX”）即算一次猜测，无需 `/猜船 猜`；私聊和 @机器人 时生效。 |
-| `group_guess_without_at` | 群聊免 @ | `true` | 群聊未 @ 时也允许猜船：整句舰名或“我猜X”才计数；指令仍需 @；重复舰名静默忽略。 |
-| `render_cards` | 图片卡片 | `true` | 用图片卡片展示属性反馈、历史与帮助；关闭后改为纯文本。 |
-| `render_backend` | 渲染后端 | `auto` | `auto`=本地优先、失败回退远端；`local`=只用本地；`remote`=只用远端 `html_render`。 |
-| `card_image_format` | 图片格式 | `png` | `png` 文字最清晰；`jpeg` 体积更小、发送更快。 |
-| `card_image_quality` | JPEG 质量 | `80` | 30–95，仅图片格式为 `jpeg` 时生效。 |
-| `render_scale` | 渲染倍率 | `1.5` | 0.5–2.0；1.5 约输出 1590 px 宽，手机上更清晰。 |
-| `browser_path` | Chromium 路径 | 空 | 留空自动探测 Playwright 浏览器；异常时可手动指定。 |
-| `local_render_timeout_seconds` | 本地渲染超时 | `20` | 秒，含首次 Chromium 冷启动；超时后按配置回退远端或纯文本。 |
-| `remote_render_fallback` | 远端渲染回退 | `true` | `auto` 模式下本地渲染失败或超时时，是否回退远端 `html_render`。 |
-| `render_timeout_seconds` | 远端渲染超时 | `15` | 秒；超时后放弃渲染、改发纯文本。 |
-| `llm_tool_enabled` | 启用 LLM 工具 | `true` | 注册 `wows_guess` 工具，支持“帮我猜胡德”“还剩几次”等自然语言；需模型支持 function calling。 |
-| `llm_tool_cards_only` | LLM 仅返回卡片 | `true` | 工具发送卡片后不再让模型补充文字，回复更快。 |
+| 配置 | 默认 | 说明 |
+| --- | --- | --- |
+| `refresh_on_start` | `true` | 启动时刷新题库；有缓存则后台刷新、不阻塞加载，失败继续用旧缓存。 |
+| `free_text_guess` | `true` | 对局中直接发舰名即算一次猜测。 |
+| `group_guess_without_at` | `true` | 群聊未 @ 时也允许猜船（整句舰名/“我猜X”）。 |
+| `render_cards` | `true` | 用图片卡片展示反馈与帮助；关闭后改为纯文本。 |
+| `render_backend` | `auto` | `auto` 本地优先、失败回退远端；`local` 只用本地；`remote` 只用远端 `html_render`。 |
+| `card_image_format` | `png` | `png` 最清晰；`jpeg` 体积更小。 |
+| `card_image_quality` | `80` | 30–95，仅 `jpeg` 生效。 |
+| `render_scale` | `1.5` | 0.5–2.0；1.5 约输出 1590px 宽。 |
+| `browser_path` | 空 | 留空自动探测 Playwright 浏览器，异常时可手动指定。 |
+| `local_render_timeout_seconds` | `20` | 本地渲染超时（含首次 Chromium 冷启动）。 |
+| `remote_render_fallback` | `true` | `auto` 模式下本地失败是否回退远端。 |
+| `render_timeout_seconds` | `15` | 远端渲染超时，超时改发纯文本。 |
+| `llm_tool_enabled` | `true` | 注册 `wows_guess` LLM 工具。 |
+| `llm_tool_cards_only` | `true` | 发卡后结束本轮，不再请求模型补文字。 |
 
-以上短标题与 hint 提示和插件配置页一致（见 `_conf_schema.json`）；每局次数当前固定 15 次（`main.py` 常量），暂未做成配置项。
+短标题与说明与插件配置页一致（`_conf_schema.json`）；每局 15 次为 `main.py` 常量，暂未开放配置。
 
-## 数据和联网
+## 数据与联网
 
-- 首次加载会从 `https://www.woyiba.com/data/` 下载 `ships.json`、`attributes.json`、难度配置以及普通/困难题库；缓存保存在 AstrBot 的 `data/plugin_data/astrbot_plugin_wowsguess/woyiba_data/`。下载启用大小上限（单文件 8 MB、总计 24 MB）、10 秒连接/读取超时和 30 秒总预算，只接受 `https://www.woyiba.com`；五个文件全部下载并逐字段校验通过后才原子替换旧缓存。
-- 默认 `refresh_on_start=true`：启动时如果已有可用缓存，会立即使用缓存并在后台刷新，不阻塞插件加载；后台刷新失败只记录警告并继续用旧缓存。`/猜船 刷新数据` 会同步刷新并显示结果，失败时提示“继续使用本地缓存”。若首次加载且网络不可用，`/猜船 开始` 会提示明确错误。
-- 只使用网站公开的静态舰船资料；不调用每日挑战、个人统计或多人房间 API，不共享用户信息。
+- 首次使用从 `https://www.woyiba.com/data/` 下载 5 个公开 JSON，缓存到 `data/plugin_data/astrbot_plugin_wowsguess/woyiba_data/`：单文件 8 MB、总计 24 MB 上限，10s 超时、30s 总预算，仅接受 `https://www.woyiba.com`，逐字段校验后原子替换。
+- 启动时后台刷新不阻塞插件加载；`/猜船 刷新数据` 同步刷新并提示结果，失败继续使用本地缓存；首次加载且断网时 `/猜船 开始` 会提示明确错误。
+- 仅使用公开静态舰船资料，不调用每日挑战/个人统计/多人房间接口，不共享用户信息。
 
-## 安装
+## 安装、兼容与测试
 
-将本目录放入 AstrBot 的 `data/plugins/astrbot_plugin_wowsguess/`，然后在 WebUI 重载插件。AstrBot 会按 `requirements.txt` 安装 `aiohttp` 与 `playwright`。若要用本地渲染，还需在 AstrBot 的 Python 环境里安装一次 Chromium：
+将本目录放入 AstrBot 的 `data/plugins/astrbot_plugin_wowsguess/`，在 WebUI 重载插件；AstrBot 会按 `requirements.txt` 安装 `aiohttp` 与 `playwright`。本地渲染需再安装 Chromium：
 
 ```bash
 cd /path/to/AstrBot
 ./.venv/bin/python -m playwright install chromium
 ```
 
-不装 Playwright/Chromium 也能用：插件会自动退回远端 `html_render()`。
+- 未安装 Playwright/Chromium 也能用，插件会自动回退远端 `html_render()`。
+- 兼容 AstrBot `>=4.16,<5`；插件数据目录通过 `StarTools.get_data_dir()` 获取。
+- 单元测试：`python -m pytest astrbot_plugin_wowsguess/tests`（需已安装 AstrBot，建议在插件目录的上一级运行），覆盖自由文本匹配、LLM 工具校验与按需暴露、本地渲染器及超时/熔断/回退。
 
-## 兼容性
+## 来源与声明
 
-`metadata.yaml` 声明 AstrBot `>=4.16,<5`。插件数据目录通过 `StarTools.get_data_dir()` 获取。
-
-## 开发与测试
-
-自由文本匹配、LLM 工具参数校验、工具按需暴露、本地渲染器与渲染编排（含超时/熔断/回退）都有单元测试：
-
-```bash
-python -m pytest astrbot_plugin_wowsguess/tests
-```
-
-测试会 `import astrbot` 来验证工具注册与事件钩子，需要环境里已安装 AstrBot；建议在插件目录的上一级运行（AstrBot 会在当前工作目录创建 `data/`）。
-
-## 来源与实现说明
-
-玩法、公开数据结构与数值判定规则通过对网站已公开前端资源进行静态分析得出，灵感/原站：<https://www.woyiba.com/>。
-
-本插件为独立 Python 实现，不复制或分发原站 JavaScript、网页样式、图片或服务端代码。原站多人房间、每日排行榜与账号/统计系统未移植。
+玩法、公开数据结构与判定规则基于 woyiba.com 已公开前端资源的静态分析，原站：<https://www.woyiba.com/>。本插件为独立 Python 实现，不复制或分发原站 JavaScript、样式、图片或服务端代码；未移植多人房间、每日排行榜与账号统计系统。
