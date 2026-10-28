@@ -189,22 +189,26 @@ class LocalCardRenderer:
         except ImportError as exc:
             raise RenderError("未安装 playwright，无法使用本地渲染。") from exc
 
-        if self._playwright is None:
-            self._playwright = await async_playwright().start()
-
-        self._browser = await self._launch_browser()
-
-        self._context = await self._browser.new_context(
-            viewport={
-                "width": self._settings.viewport_width,
-                "height": DEFAULT_VIEWPORT_HEIGHT,
-            },
-            device_scale_factor=self._settings.scale,
-            locale="zh-CN",
-        )
-        self._page = await self._context.new_page()
-        # Cards are fully self-contained; block any accidental network access.
-        await self._page.route("**/*", self._block_request)
+        try:
+            if self._playwright is None:
+                self._playwright = await async_playwright().start()
+            self._browser = await self._launch_browser()
+            self._context = await self._browser.new_context(
+                viewport={
+                    "width": self._settings.viewport_width,
+                    "height": DEFAULT_VIEWPORT_HEIGHT,
+                },
+                device_scale_factor=self._settings.scale,
+                locale="zh-CN",
+            )
+            self._page = await self._context.new_page()
+            # Cards are fully self-contained; block any accidental network access.
+            await self._page.route("**/*", self._block_request)
+        except asyncio.CancelledError:
+            # A rendering timeout cancels this task: tear down the half-started stack so
+            # no orphan Chromium process survives the cancellation, then let it propagate.
+            await self._close_resources()
+            raise
         self._logger.info(
             "本地卡片渲染器已启动（%s, quality=%s, scale=%s, width=%s）。",
             self._settings.image_format,
@@ -313,23 +317,27 @@ class LocalCardRenderer:
         except Exception:  # noqa: BLE001 - next render retries the full start
             self._page = None
 
+    async def _close_resources(self) -> None:
+        """Release page/context/browser/playwright without touching the locks."""
+        page, self._page = self._page, None
+        context, self._context = self._context, None
+        browser, self._browser = self._browser, None
+        playwright, self._playwright = self._playwright, None
+        for resource, method in (
+            (page, "close"),
+            (context, "close"),
+            (browser, "close"),
+            (playwright, "stop"),
+        ):
+            if resource is None:
+                continue
+            try:
+                await getattr(resource, method)()
+            except Exception:  # noqa: BLE001 - teardown must not raise
+                pass
+
     async def close(self) -> None:
         """Shut the browser stack down; safe to call repeatedly."""
         self._closed = True
         async with self._start_lock:
-            page, self._page = self._page, None
-            context, self._context = self._context, None
-            browser, self._browser = self._browser, None
-            playwright, self._playwright = self._playwright, None
-            for resource, method in (
-                (page, "close"),
-                (context, "close"),
-                (browser, "close"),
-                (playwright, "stop"),
-            ):
-                if resource is None:
-                    continue
-                try:
-                    await getattr(resource, method)()
-                except Exception:  # noqa: BLE001 - teardown must not raise
-                    pass
+            await self._close_resources()

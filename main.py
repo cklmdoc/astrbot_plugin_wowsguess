@@ -90,14 +90,29 @@ def _mark_doc(text: str):
     return decorator
 
 
+def _patch_tool_parameters(name: str, parameters: dict[str, Any]) -> bool:
+    """Best-effort patch of the registered tool schema.
+
+    ``llm_tool`` builds parameters from the docstring, which cannot express enums or
+    required fields; the registry layout is private to AstrBot, so keep the patch
+    defensive and let ``_verify_llm_tools`` report a mismatch instead of crashing.
+    """
+
+    try:
+        for tool in reversed(llm_tools.func_list):
+            if tool.name == name:
+                tool.parameters = parameters
+                return True
+    except Exception:  # noqa: BLE001 - private registry shape may change between versions
+        return False
+    return False
+
+
 def _tool_schema(name: str, parameters: dict[str, Any]):
     """Docstrings only express plain types; swap in the full JSON schema (enums, required)."""
 
     def decorator(func):
-        for tool in reversed(llm_tools.func_list):
-            if tool.name == name:
-                tool.parameters = parameters
-                break
+        _patch_tool_parameters(name, parameters)
         return func
 
     return decorator
@@ -126,6 +141,7 @@ class WowsGuessPlugin(Star):
         self._catalogue: Catalogue | None = None
         self._ready_lock = asyncio.Lock()
         self._last_tool_use: dict[str, float] = {}
+        self._refresh_task: asyncio.Task[Any] | None = None
         self.rendering = CardRenderService(
             self._build_render_settings(),
             local=self._build_local_renderer(),
@@ -139,24 +155,66 @@ class WowsGuessPlugin(Star):
         logger.info("WowsGuess 卡片渲染：%s", self.rendering.describe())
         if not self.config.get("refresh_on_start", True):
             return
+        if self.store.has_usable_cache():
+            # Serve the existing cache immediately and refresh it in the background:
+            # the download must never block plugin startup or other sessions.
+            self._refresh_task = asyncio.create_task(self._refresh_catalogue_in_background())
+            logger.info("WowsGuess 题库将在后台刷新，本次启动继续使用本地缓存。")
+            return
         try:
             await self._catalogue_or_raise(refresh=True)
             logger.info("WowsGuess public ship catalogue refreshed.")
         except DataUnavailableError as exc:
             logger.warning("WowsGuess catalogue was not refreshed: %s", exc)
 
+    async def _refresh_catalogue_in_background(self) -> None:
+        """Refresh the cache after startup without raising on network failures."""
+        try:
+            catalogue = await self._catalogue_or_raise(refresh=True)
+        except DataUnavailableError as exc:
+            logger.warning("WowsGuess 题库后台刷新失败，继续使用本地缓存：%s", exc)
+            return
+        if self.store.last_refresh_ok:
+            logger.info("WowsGuess 题库已刷新：%s 艘舰船。", len(catalogue.ships))
+        else:
+            logger.warning("WowsGuess 题库刷新失败，继续使用本地缓存。")
+
     async def terminate(self) -> None:
-        """Release the local Chromium when the plugin is reloaded or disabled."""
+        """Release the local Chromium and stop a pending background refresh."""
+        task, self._refresh_task = self._refresh_task, None
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception:  # noqa: BLE001 - teardown must not raise
+                pass
         await self.rendering.close()
 
     def _verify_llm_tools(self) -> None:
-        """The full schema is patched in by _tool_schema; fail loudly if AstrBot changes func_list."""
-        tool = llm_tools.get_func(llm_tool.NAME)
-        if tool is None or tool.parameters != llm_tool.SCHEMA:
+        """Verify the tool was registered with the full schema; repair it when possible."""
+        try:
+            tool = llm_tools.get_func(llm_tool.NAME)
+        except Exception:  # noqa: BLE001 - private registry shape may change between versions
+            tool = None
+        if tool is None:
             logger.error(
-                "WowsGuess LLM 工具 %s 未按预期注册，请检查 AstrBot 版本兼容性。",
+                "WowsGuess LLM 工具 %s 未注册，请检查 AstrBot 版本兼容性。",
                 llm_tool.NAME,
             )
+            return
+        if tool.parameters == llm_tool.SCHEMA:
+            return
+        if _patch_tool_parameters(llm_tool.NAME, llm_tool.SCHEMA):
+            logger.warning(
+                "WowsGuess LLM 工具 %s 的完整 schema 已在启动时重新应用。", llm_tool.NAME
+            )
+            return
+        logger.error(
+            "WowsGuess LLM 工具 %s 无法应用完整 schema，请检查 AstrBot 版本兼容性。",
+            llm_tool.NAME,
+        )
 
     async def _catalogue_or_raise(self, refresh: bool = False) -> Catalogue:
         async with self._ready_lock:
@@ -576,6 +634,10 @@ class WowsGuessPlugin(Star):
             catalogue = await self._catalogue_or_raise(refresh=True)
         except DataUnavailableError as exc:
             return ActionResult(str(exc), error=True)
+        if not self.store.last_refresh_ok:
+            return ActionResult(
+                f"题库刷新失败，继续使用本地缓存（{len(catalogue.ships)} 艘舰船）。"
+            )
         return ActionResult(f"题库已刷新：{len(catalogue.ships)} 艘舰船。")
 
     async def _action_guess(self, event: AstrMessageEvent, argument: str) -> ActionResult:
@@ -667,13 +729,12 @@ class WowsGuessPlugin(Star):
             if not quiet:  # 未 @ 时重复/已结束多半是闲聊，静默忽略
                 yield event.plain_result(str(exc))
             return
-        if quiet:
-            stop = getattr(event, "stop_event", None)
-            if callable(stop):
-                stop()  # 已作为猜测处理，不再交给其它插件
         feedback = await self._feedback_reply(
             catalogue, updated, row, ship, answer, player=self._sender(event)
         )
+        stop = getattr(event, "stop_event", None)
+        if callable(stop):
+            stop()  # 这次猜测已有卡片/文本答复，不再交给其它插件或默认 LLM
         yield self._emit(event, feedback)
 
     @classmethod

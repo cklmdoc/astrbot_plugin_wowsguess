@@ -36,7 +36,7 @@
 
 | 配置 | 短标题 | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `refresh_on_start` | 启动刷新题库 | `true` | 启动时下载最新公开题库；失败继续使用本地缓存。 |
+| `refresh_on_start` | 启动刷新题库 | `true` | 启动时刷新题库；已有缓存时在后台刷新、不阻塞插件加载，失败继续使用旧缓存。 |
 | `free_text_guess` | 免命令直猜 | `true` | 对局中直接发舰名（或“猜XX”）即算一次猜测，无需 `/猜船 猜`；私聊和 @机器人 时生效。 |
 | `group_guess_without_at` | 群聊免 @ | `true` | 群聊未 @ 时也允许猜船：整句舰名或“我猜X”才计数；指令仍需 @；重复舰名静默忽略。 |
 | `render_cards` | 图片卡片 | `true` | 用图片卡片展示属性反馈、历史与帮助；关闭后改为纯文本。 |
@@ -55,8 +55,8 @@
 
 ## 数据和联网
 
-- 首次加载会从 `https://www.woyiba.com/data/` 下载 `ships.json`、`attributes.json` 以及普通/困难题库；缓存保存在 AstrBot 的 `data/plugin_data/astrbot_plugin_wowsguess/`。
-- 默认设置为启动时自动刷新一次。若离线但已有缓存，插件会继续使用缓存；若首次加载且网络不可用，`/猜船 开始` 会提示明确错误。
+- 首次加载会从 `https://www.woyiba.com/data/` 下载 `ships.json`、`attributes.json`、难度配置以及普通/困难题库；缓存保存在 AstrBot 的 `data/plugin_data/astrbot_plugin_wowsguess/woyiba_data/`。下载启用大小上限（单文件 8 MB、总计 24 MB）、10 秒连接/读取超时和 30 秒总预算，只接受 `https://www.woyiba.com`；五个文件全部下载并逐字段校验通过后才原子替换旧缓存。
+- 默认 `refresh_on_start=true`：启动时如果已有可用缓存，会立即使用缓存并在后台刷新，不阻塞插件加载；后台刷新失败只记录警告并继续用旧缓存。`/猜船 刷新数据` 会同步刷新并显示结果，失败时提示“继续使用本地缓存”。若首次加载且网络不可用，`/猜船 开始` 会提示明确错误。
 - 只使用网站公开的静态舰船资料；不调用每日挑战、个人统计或多人房间 API，不共享用户信息。
 
 ## 安装

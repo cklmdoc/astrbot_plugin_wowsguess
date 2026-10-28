@@ -15,14 +15,23 @@ class Catalogue:
         attributes: dict[str, Any],
         pools: dict[str, dict[str, Any]],
     ) -> None:
-        self.ships = list(ships)
-        self.attributes = attributes
-        self.pools = pools
-        self.by_index = {str(ship["index"]): ship for ship in self.ships}
-        self.definitions = {
-            str(definition["key"]): definition
-            for definition in attributes.get("attributes", [])
-        }
+        self.ships = [ship for ship in ships if isinstance(ship, dict)]
+        self.attributes = attributes if isinstance(attributes, dict) else {}
+        self.pools = pools if isinstance(pools, dict) else {}
+        self.by_index: dict[str, dict[str, Any]] = {}
+        for ship in self.ships:
+            index = ship.get("index")
+            if isinstance(index, str) and index.strip():
+                self.by_index.setdefault(index, ship)
+        raw_definitions = self.attributes.get("attributes")
+        self.definitions: dict[str, dict[str, Any]] = {}
+        if isinstance(raw_definitions, list):
+            for definition in raw_definitions:
+                if not isinstance(definition, dict):
+                    continue
+                key = definition.get("key")
+                if isinstance(key, str) and key.strip():
+                    self.definitions.setdefault(key, definition)
         self._exact_names: dict[str, list[dict[str, Any]]] = {}
         for ship in self.ships:
             for name in self._ship_names(ship):

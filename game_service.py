@@ -118,7 +118,13 @@ class GameService:
                 catalogue.definitions,
                 max_attempts=self.max_attempts,
             )
-            previous = list(state.get("players") or [""] * len(state.get("guesses") or []))
+            # Older saves may have fewer player entries than guess indices: realign
+            # instead of shifting names onto the wrong rows forever.
+            guess_count = len(updated.get("guesses") or [])
+            expected = max(0, guess_count - 1)
+            previous = list(state.get("players") or [])
+            if len(previous) != expected:
+                previous = (previous + [""] * expected)[:expected]
             updated = {**updated, "players": previous + [str(player or "")]}
             self._write(session_id, updated)
             return updated, row, answer

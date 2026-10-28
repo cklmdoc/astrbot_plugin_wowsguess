@@ -200,6 +200,7 @@ def test_free_text_guess_accepts_short_forms(text):
         assert len(results) == 1
         assert results[0][0] == "text" and f"第 1/{plugin_main.MAX_ATTEMPTS} 次：天津" in results[0][1]
         assert plugin.games.state["guesses"] == ["PZSC719"]
+        assert event.stopped is True
 
     run(scenario())
 
@@ -226,8 +227,21 @@ def test_free_text_guess_reports_duplicates_in_chinese():
     async def scenario():
         plugin = make_plugin()
         assert await collect(plugin.free_text_guess(FakeEvent("天津")))
-        results = await collect(plugin.free_text_guess(FakeEvent("天津")))
+        duplicate = FakeEvent("天津")
+        results = await collect(plugin.free_text_guess(duplicate))
         assert len(results) == 1 and "已经猜过" in results[0][1]
+        assert duplicate.stopped is False
+
+    run(scenario())
+
+
+def test_at_free_text_guess_stops_event_after_success():
+    async def scenario():
+        plugin = make_plugin()
+        event = FakeEvent("天津", at=True)
+        results = await collect(plugin.free_text_guess(event))
+        assert len(results) == 1
+        assert event.stopped is True
 
     run(scenario())
 
@@ -539,5 +553,40 @@ def test_tool_disabled_by_config_is_removed():
         req = SimpleNamespace(func_tool=ToolSet([llm_tools.get_func(llm_tool.NAME)]), system_prompt="")
         await plugin._offer_guess_tool(FakeEvent("帮我猜胡德"), req)
         assert req.func_tool.get_tool(llm_tool.NAME) is None
+
+    run(scenario())
+
+
+class FakeStore:
+    """Stand-in for WowsGuessDataStore used by the refresh command tests."""
+
+    def __init__(self, ok: bool) -> None:
+        self.last_refresh_ok = ok
+        self.calls = 0
+
+    async def get_catalogue(self, refresh: bool = False):
+        self.calls += 1
+        return make_catalogue()
+
+
+def test_refresh_command_reports_success():
+    async def scenario():
+        plugin = make_plugin()
+        plugin.store = FakeStore(ok=True)
+        plugin._catalogue = None
+        results = await collect(plugin.wows_guess(FakeEvent("猜船 刷新数据", admin=True)))
+        assert results[0][0] == "text" and "题库已刷新" in results[0][1]
+        assert plugin.store.calls == 1
+
+    run(scenario())
+
+
+def test_refresh_command_reports_failure_and_keeps_cache():
+    async def scenario():
+        plugin = make_plugin()
+        plugin.store = FakeStore(ok=False)
+        results = await collect(plugin.wows_guess(FakeEvent("猜船 刷新数据", admin=True)))
+        assert results[0][0] == "text"
+        assert "刷新失败" in results[0][1] and "缓存" in results[0][1]
 
     run(scenario())
