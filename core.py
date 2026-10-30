@@ -2,11 +2,22 @@
 
 from __future__ import annotations
 
+import random
 from typing import Any
 
 
 FLOAT_EPSILON = 1e-9
 RELATIVE_EPSILON = 1e-12
+
+
+def choose_random_attribute_keys(attribute_keys: list[str], rng: Any | None = None) -> list[str]:
+    """Choose a random-sized, duplicate-free set of visible attributes for one guess."""
+    candidates = list(dict.fromkeys(key for key in attribute_keys if isinstance(key, str)))
+    if not candidates:
+        return []
+    chooser = rng if rng is not None else random
+    count = chooser.randint(1, len(candidates))
+    return chooser.sample(candidates, count)
 
 
 def _as_float(value: Any) -> float | None:

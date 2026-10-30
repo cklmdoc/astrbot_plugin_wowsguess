@@ -359,9 +359,12 @@ class WowsGuessPlugin(Star):
         """Rebuild the guess history shown under the current guess."""
         guesses = list(state.get("guesses") or [])
         answer = catalogue.ship(str(state.get("answerIndex")))
-        pool = catalogue.pool(str(state.get("difficulty"))) or {}
+        difficulty = str(state.get("difficulty"))
+        pool_difficulty = "standard" if difficulty == "random" else difficulty
+        pool = catalogue.pool(pool_difficulty) or {}
         if not pool.get("attributeKeys"):
             pool = {"attributeKeys": list(catalogue.definitions)}
+        feedback_history = list(state.get("feedbackKeys") or [])
         players = list(state.get("players") or [""] * len(guesses))
         rows = []
         if answer is not None:
@@ -370,16 +373,40 @@ class WowsGuessPlugin(Star):
                 if ship is None:
                     continue
                 try:
-                    evaluation = evaluate_guess(ship, answer, pool, catalogue.definitions)
+                    guess_pool = pool
+                    if difficulty == "random" and position <= len(feedback_history):
+                        keys = [
+                            key
+                            for key in feedback_history[position - 1]
+                            if isinstance(key, str) and key in catalogue.definitions
+                        ]
+                        if keys:
+                            guess_pool = {**pool, "attributeKeys": keys}
+                    evaluation = evaluate_guess(ship, answer, guess_pool, catalogue.definitions)
                 except (KeyError, TypeError, ValueError):
                     continue
                 states = [item["state"] for item in evaluation["feedback"]]
+                attributes = (
+                    [
+                        {
+                            "label": str(
+                                catalogue.definitions.get(item["key"], {}).get("label")
+                                or item["key"]
+                            ),
+                            "state": item["state"],
+                        }
+                        for item in evaluation["feedback"]
+                    ]
+                    if difficulty == "random"
+                    else []
+                )
                 rows.append(
                     {
                         "n": position,
                         "name": self._name(ship),
                         "player": str(players[position - 1] if position <= len(players) else ""),
                         "states": states,
+                        "attributes": attributes,
                         "hit": sum(1 for value in states if value == "exact"),
                         "win": bool(evaluation["correct"]),
                     }
@@ -452,8 +479,8 @@ class WowsGuessPlugin(Star):
         return [
             {
                 "category": "开始游戏",
-                "command": "/猜船 开始 [普通|困难] [等级/范围]",
-                "description": "新开一局。例：`开始 普通 V`、`开始 困难 8-10`；等级支持阿拉伯数字与罗马数字。",
+                "command": "/猜船 开始 [普通|困难|随机] [等级/范围]",
+                "description": "新开一局。例：`开始 普通 V`、`开始 困难 8-10`；随机难度每次猜测会重新随机抽取一组有效属性，不固定数量。",
             },
             {
                 "category": "提交猜测",
@@ -491,7 +518,10 @@ class WowsGuessPlugin(Star):
     def _format_state(self, catalogue: Catalogue, state: dict[str, Any]) -> str:
         guesses = list(state.get("guesses") or [])
         labels = [self._name(catalogue.ship(index) or {"index": index}) for index in guesses]
-        difficulty = "普通" if state.get("difficulty") == "standard" else "困难"
+        difficulty = str(state.get("difficulty") or "standard")
+        difficulty_label = {"standard": "普通", "hard": "困难", "random": "随机"}.get(
+            difficulty, difficulty
+        )
         tier_range = state.get("tierRange")
         tier_suffix = ""
         if isinstance(tier_range, list) and len(tier_range) == 2:
@@ -501,7 +531,7 @@ class WowsGuessPlugin(Star):
                 pass
         remaining = max(0, MAX_ATTEMPTS - len(guesses))
         guessed = "、".join(labels) if labels else "暂无"
-        return f"难度：{difficulty}{tier_suffix}\n进度：{len(guesses)}/{MAX_ATTEMPTS}，剩余 {remaining} 次\n已猜：{guessed}"
+        return f"难度：{difficulty_label}{tier_suffix}\n进度：{len(guesses)}/{MAX_ATTEMPTS}，剩余 {remaining} 次\n已猜：{guessed}"
 
     # ---- command parsing / dispatch -------------------------------------
 
@@ -526,7 +556,7 @@ class WowsGuessPlugin(Star):
 
     @filter.command("猜船")
     async def wows_guess(self, event: AstrMessageEvent):
-        """猜船 开始 [普通|困难] / 猜 <舰名> / 状态 / 放弃 / 帮助 / 刷新数据。"""
+        """猜船 开始 [普通|困难|随机] / 猜 <舰名> / 状态 / 放弃 / 帮助 / 刷新数据。"""
         action_word, argument = self._parse_command(event.message_str)
         action = COMMAND_ACTIONS.get(action_word)
         if action is None:
@@ -577,9 +607,13 @@ class WowsGuessPlugin(Star):
             )
         except (DataUnavailableError, ValueError) as exc:
             return ActionResult(str(exc), error=True)
-        label = "普通" if difficulty == "standard" else "困难"
+        label = {"standard": "普通", "hard": "困难", "random": "随机"}[difficulty]
         tier_label = f"（{format_tier_range(tier_range)}）" if tier_range else ""
         hint = (
+            "\n随机难度会在每次猜测后重新抽取要展示的属性。"
+            if difficulty == "random"
+            else ""
+        ) + (
             "\n对局中也可以直接发舰名（无需输入 /猜船 猜）；群聊未 @ 时只认整句舰名。"
             if self.config.get("free_text_guess", True)
             else ""
@@ -845,7 +879,8 @@ class WowsGuessPlugin(Star):
     def _help_text() -> str:
         return (
             "《窝一把·猜战舰》指令帮助（图片不可用时的文本版）\n"
-            "`/猜船 开始 [普通|困难] [等级/范围]` — 新开一局；例：`/猜船 开始 普通 V`、`/猜船 开始 困难 8-10`\n"
+            "`/猜船 开始 [普通|困难|随机] [等级/范围]` — 新开一局；例：`/猜船 开始 普通 V`、`/猜船 开始 困难 8-10`、`/猜船 开始 随机`\n"
+            "随机难度每次猜测都会重新随机抽取 1 项或多项属性；同一次不重复，下一次重新抽。\n"
             "`/猜船 猜 <舰名>` — 提交中文名、英文名、代码或别名\n"
             "对局中也可以直接发舰名（如「胡德」）；群聊未 @ 时只认整句舰名或「我猜X」，可在配置里关闭；@ 或私聊时也可说「帮我猜胡德」「还剩几次」\n"
             "`/猜船 状态` — 查看难度、等级限制、已猜列表与剩余次数\n"

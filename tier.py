@@ -61,16 +61,19 @@ def parse_start_options(value: str) -> tuple[str, tuple[int, int] | None]:
     """Parse optional difficulty plus one optional single/range tier selector."""
     tokens = value.strip().split()
     if len(tokens) > 2:
-        raise ValueError("用法：/猜船 开始 [普通|困难] [等级或等级范围]。")
+        raise ValueError("用法：/猜船 开始 [普通|困难|随机] [等级或等级范围]。")
     difficulty = "standard"
-    if tokens and tokens[0].casefold() in {"普通", "标准", "standard", "normal", "困难", "hard"}:
+    if tokens and tokens[0].casefold() in {"普通", "标准", "standard", "normal", "困难", "hard", "随机", "random"}:
+        selected = tokens.pop(0).casefold()
         difficulty = (
-            "hard" if tokens.pop(0).casefold() in {"困难", "hard"} else "standard"
+            "hard" if selected in {"困难", "hard"}
+            else "random" if selected in {"随机", "random"}
+            else "standard"
         )
     if not tokens:
         return difficulty, None
     if len(tokens) != 1:
-        raise ValueError("用法：/猜船 开始 [普通|困难] [等级或等级范围]。")
+        raise ValueError("用法：/猜船 开始 [普通|困难|随机] [等级或等级范围]。")
     return difficulty, parse_tier_range(tokens[0])
 
 

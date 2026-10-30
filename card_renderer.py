@@ -14,6 +14,7 @@ CARD_WIDTH = 1060
 _STATE_LABELS = {"exact": "完全相同", "close": "接近", "far": "不匹配"}
 _DIRECTION_LABELS = {"up": "更大", "down": "更小"}
 _OUTCOME_LABELS = {"playing": "进行中", "won": "猜中了", "lost": "已结束", "gaveup": "已放弃"}
+_DIFFICULTY_LABELS = {"standard": "普通", "hard": "困难", "random": "随机"}
 
 
 def _text(value: Any) -> str:
@@ -131,12 +132,18 @@ def _history_view(history: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     rows = []
     for item in history or []:
         states = [_state(state) for state in (item.get("states") or [])]
+        attributes = [
+            {"label": str(attribute.get("label") or ""), "state": _state(attribute.get("state"))}
+            for attribute in item.get("attributes", [])
+            if isinstance(attribute, dict)
+        ]
         rows.append(
             {
                 "n": _int(item.get("n")),
                 "name": str(item.get("name") or ""),
                 "player": str(item.get("player") or ""),
                 "states": states,
+                "attributes": attributes,
                 "hit": _int(item.get("hit")),
                 "win": bool(item.get("win")),
             }
@@ -171,7 +178,7 @@ def make_guess_card_view(
         "remaining": max(0, _int(remaining)),
         "ship_name": str(ship_name),
         "ship_index": str(ship_index),
-        "difficulty_label": "普通" if difficulty == "standard" else "困难",
+        "difficulty_label": _DIFFICULTY_LABELS.get(str(difficulty), str(difficulty)),
         "difficulty_key": str(difficulty),
         "status_text": str(status_text),
         "outcome": outcome if outcome in _OUTCOME_LABELS else "playing",
@@ -206,7 +213,7 @@ def make_status_card_view(
         "attempt": _int(attempt),
         "max_attempts": _int(max_attempts),
         "remaining": max(0, _int(remaining)),
-        "difficulty_label": "普通" if difficulty == "standard" else "困难",
+        "difficulty_label": _DIFFICULTY_LABELS.get(str(difficulty), str(difficulty)),
         "difficulty_key": str(difficulty),
         "status_text": str(status_text),
         "outcome": outcome if outcome in _OUTCOME_LABELS else "playing",
@@ -250,6 +257,7 @@ body {
   background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.10); }
 .pill.standard { color: #9CCBE8; border-color: rgba(79,185,201,.45); }
 .pill.hard { color: #F2A196; border-color: rgba(233,115,102,.45); }
+.pill.random { color: #D7BBF8; border-color: rgba(166,129,220,.50); }
 .chances { flex: none; width: 210px; text-align: right; }
 .chances .num { font-size: 34px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
 .chances .num small { font-size: 15px; font-weight: 500; color: rgba(232,238,246,.6); margin-left: 4px; }
@@ -314,11 +322,17 @@ body {
 .row .nm { width: 170px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row .pl { flex: 1; min-width: 0; color: rgba(232,238,246,.55); white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; }
-.sq { display: flex; gap: 3px; }
+.sq { display: flex; gap: 3px; flex-wrap: wrap; max-width: 360px; }
 .sq i { width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center;
   justify-content: center; background: rgba(255,255,255,.09); color: rgba(232,238,246,.45); }
 .sq i.exact { background: #5FB878; color: #0F2416; }
 .sq i.close { background: #E3B341; color: #2B2006; }
+.hattr-item { display: inline-flex; align-items: center; gap: 3px; padding: 1px 4px; border-radius: 4px; background: rgba(255,255,255,.05); }
+.hattr-item small { color: rgba(232,238,246,.68); font-size: 10px; white-space: nowrap; }
+.hattr { width: 17px; height: 17px; border-radius: 4px; display: flex; align-items: center;
+  justify-content: center; background: rgba(255,255,255,.09); color: rgba(232,238,246,.45); }
+.hattr.exact { background: #5FB878; color: #0F2416; }
+.hattr.close { background: #E3B341; color: #2B2006; }
 .row .h { width: 44px; text-align: right; color: rgba(232,238,246,.55); font-variant-numeric: tabular-nums; }
 .row.win .nm { color: #8FD6A4; }
 
@@ -427,8 +441,11 @@ def _header(
 ) -> str:
     difficulty = str(view.get("difficulty_label") or "普通")
     difficulty_key = str(view.get("difficulty_key") or "")
-    if difficulty_key not in {"standard", "hard"}:
-        difficulty_key = "standard" if difficulty == "普通" else "hard"
+    if difficulty_key not in _DIFFICULTY_LABELS:
+        difficulty_key = next(
+            (key for key, label in _DIFFICULTY_LABELS.items() if label == difficulty),
+            "standard",
+        )
     pill_html = f'<span class="pill {difficulty_key}">{_text(difficulty)}</span>'
     for pill in pills:
         pill_html += f'<span class="pill">{_text(pill)}</span>'
@@ -457,10 +474,17 @@ def _history_rows_html(rows: list[dict[str, Any]], total: int, caption: str) -> 
         )
     body = []
     for row in reversed(rows):
-        cells = "".join(
-            f'<i class="{state}">{_glyph(state if state in {"exact", "close"} else "miss", 12)}</i>'
-            for state in row["states"]
-        )
+        if row.get("attributes"):
+            cells = "".join(
+                f'<span class="hattr-item"><small>{_text(attribute["label"])}</small>'
+                f'<i class="hattr {attribute["state"]}">{_glyph(attribute["state"] if attribute["state"] in {"exact", "close"} else "miss", 10)}</i></span>'
+                for attribute in row["attributes"]
+            )
+        else:
+            cells = "".join(
+                f'<i class="{state}">{_glyph(state if state in {"exact", "close"} else "miss", 12)}</i>'
+                for state in row["states"]
+            )
         classes = "row" + (" win" if row.get("win") else "")
         body.append(
             f'<div class="{classes}"><span class="n">#{row["n"]}</span>'

@@ -23,10 +23,11 @@ ACTIONS = {
     "帮助": "help",
 }
 
-DIFFICULTIES = {"普通": "standard", "标准": "standard", "困难": "hard"}
+DIFFICULTIES = {"普通": "普通", "标准": "普通", "困难": "困难", "随机": "随机"}
 
 DESCRIPTION = (
-    "玩《窝一把·猜战舰》（战舰世界猜船游戏）：开始一局、提交一次舰名猜测、查看进度、放弃、帮助。"
+    "玩《窝一把·猜战舰》（战舰世界猜船游戏）：开始普通/困难/随机难度的一局、提交一次舰名猜测、查看进度、放弃、帮助。"
+    "随机难度每次猜测都会重新随机抽取要展示的舰船属性。"
     "用户聊猜船、只发一个战舰名、说“猜XX / 帮我猜XX”、问还剩几次、要求放弃或者问怎么玩时调用。"
     "返回 JSON：status、text（可直接转述的要点）、next（下一步建议）；"
     "不要编造猜测结果或属性反馈。"
@@ -46,8 +47,8 @@ SCHEMA = {
         },
         "difficulty": {
             "type": "string",
-            "enum": ["普通", "困难"],
-            "description": "action=开始 时的难度，默认普通",
+            "enum": ["普通", "困难", "随机"],
+            "description": "action=开始 时的难度，默认普通；随机难度每次猜测会重新随机显示一组属性",
         },
         "tier": {
             "type": "string",
@@ -98,8 +99,8 @@ def parse_args(args: dict[str, Any]) -> Request:
         parts: list[str] = []
         if difficulty:
             if difficulty not in DIFFICULTIES:
-                raise InvalidArgs("difficulty 只能是 普通 或 困难")
-            parts.append("困难" if DIFFICULTIES[difficulty] == "hard" else "普通")
+                raise InvalidArgs("difficulty 只能是 普通、困难 或 随机")
+            parts.append(DIFFICULTIES[difficulty])
         if tier:
             try:
                 parse_tier_range(tier)
