@@ -242,9 +242,35 @@ class WowsGuessPlugin(Star):
         return str(ship.get("nameZh") or ship.get("name") or ship["index"])
 
     @staticmethod
+    def _event_field(value: Any, name: str) -> Any:
+        """Read a field from adapter payloads that may be mappings or objects."""
+        if isinstance(value, dict):
+            return value.get(name)
+        getter = getattr(value, "get", None)
+        if callable(getter):
+            try:
+                result = getter(name)
+            except (KeyError, TypeError):
+                result = None
+            if result is not None:
+                return result
+        return getattr(value, name, None)
+
+    @staticmethod
     def _sender(event: AstrMessageEvent) -> str:
+        message_obj = getattr(event, "message_obj", None)
+        if getattr(message_obj, "group_id", ""):
+            raw_message = getattr(message_obj, "raw_message", None)
+            raw_sender = WowsGuessPlugin._event_field(raw_message, "sender")
+            card = WowsGuessPlugin._event_field(raw_sender, "card")
+            if card is None:
+                card = WowsGuessPlugin._event_field(
+                    getattr(message_obj, "sender", None), "card"
+                )
+            if card is not None and str(card).strip():
+                return str(card).strip()
         getter = getattr(event, "get_sender_name", None)
-        return str(getter()) if callable(getter) else ""
+        return str(getter()).strip() if callable(getter) else ""
 
     @staticmethod
     def _format_value(definition: dict[str, Any], value: Any) -> str:
